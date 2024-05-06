@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+
+    tools {
+        maven "M3"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/lleellee0/deploy-test', branch: 'main'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    sh 'mvn clean package'
+                }
+            }
+        }
+        
+        stage('Deploy and Check') {
+            steps {
+                script {
+                    def servers = ['64.176.226.118', '64.176.226.119', '64.176.226.120']
+                    def deployPath = '/root'
+                    def jarFile = 'target/shortenurlservice-0.0.1-SNAPSHOT.jar'
+                    
+                    parallel servers.collectEntries {
+                        serverIp -> 
+                        [
+                            "${serverIp}": {
+                                def runAppCommand = "nohup java -jar $deployPath/shortenurlservice-0.0.1-SNAPSHOT.jar > $deployPath/app.log 2>&1 &"
+                                def checkLogCommand = "grep -m 1 'Started ShortenurlserviceApplication' $deployPath/app.log"
+
+                                // 파일 전송과 앱 실행
+                                sh "scp $jarFile root@${serverIp}:$deployPath/"
+                                sshagent(['deploy_ssh_key']) {
+                                    sh "ssh root@${serverIp} '$runAppCommand'"
+                                    sh "ssh root@${serverIp} 'tail -f $deployPath/app.log | { grep -m 1 \"Started ShortenurlserviceApplication\" && kill \\\$!; }'"
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Deployment completed successfully on all servers.'
+        }
+        failure {
+            echo 'Deployment encountered an error on one or more servers.'
+        }
+    }
+}
