@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        maven "M3"
+        maven "M3" // Jenkins에서 설정한 Maven의 이름
     }
 
     stages {
@@ -15,21 +15,7 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    // 명시적 클로저 사용
-                    { ->
-                        sh 'mvn clean package'
-                    }()
-                }
-            }
-        }
-        
-        stage('Test') {
-            steps {
-                script {
-                    // 명시적 클로저 사용
-                    { ->
-                        sh 'mvn test'
-                    }()
+                    sh 'mvn clean package'
                 }
             }
         }
@@ -37,12 +23,20 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    // 명시적 클로저 사용
-                    { ->
-                        // 배포 스크립트
-                        // 예: Docker를 사용한 배포, SSH를 통한 파일 전송 등
-                        // 예시: sh 'scp target/myapp.jar user@server:/path/to/deploy'
-                    }()
+                    // Maven 빌드로 생성된 jar 파일의 위치
+                    def jarFile = 'target/shortenurlservice-0.0.1-SNAPSHOT.jar'
+                    // 원격 서버의 IP 주소 및 배포 경로
+                    def serverIp = '64.176.226.118'
+                    def deployPath = '/root'
+                    def runAppCommand = "java -jar $deployPath/shortenurlservice-0.0.1-SNAPSHOT.jar"
+                    
+                    // 서버에 파일을 SCP로 전송
+                    sh "scp $jarFile root@$serverIp:$deployPath/"
+                    
+                    // 원격 서버에서 애플리케이션 실행
+                    sshagent(['deploy_ssh_key']) { // 'server-ssh-credentials'는 Jenkins에서 설정한 credentials ID
+                        sh "ssh root@$serverIp '$runAppCommand'"
+                    }
                 }
             }
         }
@@ -50,12 +44,10 @@ pipeline {
     
     post {
         success {
-            // 성공적인 빌드 후 할 일
-            echo 'Build was successful!'
+            echo 'Deployment was successful.'
         }
         failure {
-            // 빌드 실패 시 할 일
-            echo 'Build failed!'
+            echo 'Deployment failed.'
         }
     }
 }
