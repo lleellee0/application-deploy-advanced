@@ -1,0 +1,20 @@
+# 1. 리눅스 업데이트
+sudo dnf update -y
+
+# 2. 도커 설치
+sudo dnf install dnf-plugins-core -y
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf install docker-ce docker-ce-cli containerd.io -y
+
+# 3. 도커 서비스 시작
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# 4. 젠킨스 도커 이미지 Pull & 컨테이너 시작
+sudo docker run -d -p 8080:8080 -p 50000:50000 --name jenkins --restart=always -v jenkins_home:/var/jenkins_home jenkins/jenkins:lts
+# 4-1. 실습에서 제가 사용한 버전은 2.440.3 입니다. 따라서 동일한 버전으로 실습할 경우 아래 커맨드를 입력하면 됩니다.
+# 다만, 젠킨스 패키지들은 버전이 업데이트 되면서 설치에 실패할 가능성이 있기 때문에 lts 버전을 설치하는게 실습에 지장이 없을겁니다.
+sudo docker run -d -p 8080:8080 -p 50000:50000 --name jenkins --restart=always -v jenkins_home:/var/jenkins_home jenkins/jenkins:2.440.3
+
+#5. 초기 비밀번호 보기
+sudo docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
