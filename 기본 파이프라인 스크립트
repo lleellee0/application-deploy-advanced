@@ -1,0 +1,61 @@
+pipeline {
+    agent any
+
+    tools {
+        maven "M3"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/lleellee0/deploy-test', branch: 'main'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    // 명시적 클로저 사용
+                    { ->
+                        sh 'mvn clean package'
+                    }()
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                script {
+                    // 명시적 클로저 사용
+                    { ->
+                        sh 'mvn test'
+                    }()
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    // 명시적 클로저 사용
+                    { ->
+                        // 배포 스크립트
+                        // 예: Docker를 사용한 배포, SSH를 통한 파일 전송 등
+                        // 예시: sh 'scp target/myapp.jar user@server:/path/to/deploy'
+                    }()
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            // 성공적인 빌드 후 할 일
+            echo 'Build was successful!'
+        }
+        failure {
+            // 빌드 실패 시 할 일
+            echo 'Build failed!'
+        }
+    }
+}
