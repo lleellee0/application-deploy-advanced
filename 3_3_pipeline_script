@@ -6,6 +6,24 @@ pipeline {
     }
 
     stages {
+        stage('Build') {
+            steps {
+                script {
+                    echo 'Building the project...'
+                    sh 'mvn clean package'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    echo 'Running tests...'
+                    sh 'mvn test'
+                }
+            }
+        }
+
         stage('Deploy to Server 1') {
             steps {
                 script {
