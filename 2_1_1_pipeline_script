@@ -1,0 +1,69 @@
+pipeline {
+    agent any
+
+    tools {
+        maven "M3"
+    }
+
+    stages {
+        stage('Deploy to Server 1') {
+            steps {
+                script {
+                    deployToServer("141.164.44.xxx")
+                }
+            }
+        }
+        stage('Deploy to Server 2') {
+            steps {
+                script {
+                    deployToServer("158.247.201.xxx")
+                }
+            }
+        }
+        stage('Deploy to Server 3') {
+            steps {
+                script {
+                    deployToServer("158.247.239.xxx")
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment completed successfully.'
+        }
+        failure {
+            echo 'Deployment encountered an error.'
+        }
+    }
+}
+
+def deployToServer(serverIp) {
+    def jarFile = 'target/shortenurlservice-0.0.1-SNAPSHOT.jar'
+    def deployPath = '/root'
+    def runAppCommand = "nohup java -jar $deployPath/shortenurlservice-0.0.1-SNAPSHOT.jar > $deployPath/app.log 2>&1 &"
+    def checkLogCommand = "grep -q 'Started ShortenurlserviceApplication in' $deployPath/app.log"
+
+    // 기존 애플리케이션 종료
+    sshagent(['deploy_ssh_key']) {
+        sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp 'pgrep -f shortenurlservice-0.0.1-SNAPSHOT.jar && pkill -f shortenurlservice-0.0.1-SNAPSHOT.jar || echo \"No process found\"'", returnStatus: true
+    }
+
+    // 서버에 파일을 SCP로 전송
+    sh "scp -o StrictHostKeyChecking=no $jarFile root@$serverIp:$deployPath/"
+
+    // 원격 서버에서 애플리케이션 비동기 실행
+    sshagent(['deploy_ssh_key']) {
+        sh "ssh -o StrictHostKeyChecking=no root@$serverIp '$runAppCommand'"
+        sleep 20 // 애플리케이션이 시작될 시간을 제공합니다.
+
+        // 로그 파일을 확인하여 애플리케이션 실행 확인
+        int result = sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp '$checkLogCommand'", returnStatus: true
+        if (result == 0) {
+            echo "Deployment to $serverIp was successful."
+        } else {
+            error "Deployment to $serverIp failed."
+        }
+    }
+}
