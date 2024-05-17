@@ -6,6 +6,12 @@ pipeline {
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/lleellee0/deploy-test', branch: 'main'
+            }
+        }
+
         stage('Build') {
             steps {
                 script {
