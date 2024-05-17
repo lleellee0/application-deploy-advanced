@@ -6,6 +6,30 @@ pipeline {
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/lleellee0/deploy-test', branch: 'main'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    echo 'Building the project...'
+                    sh 'mvn clean package'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    echo 'Running tests...'
+                    sh 'mvn test'
+                }
+            }
+        }
+
         stage('Build') {
             steps {
                 script {
