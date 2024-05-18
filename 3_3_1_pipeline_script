@@ -1,0 +1,155 @@
+pipeline {
+    agent any
+
+    tools {
+        maven "M3"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/lleellee0/deploy-test', branch: 'main'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    echo 'Building the project...'
+                    sh 'mvn clean package'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    echo 'Running tests...'
+                    sh 'mvn test'
+                }
+            }
+        }
+
+        stage('Deploy to Server 1') {
+            steps {
+                script {
+                    deployAndTest("141.164.44.247")
+                }
+            }
+        }
+        stage('Deploy to Server 2') {
+            steps {
+                script {
+                    deployAndTest("158.247.201.215")
+                }
+            }
+        }
+        stage('Deploy to Server 3') {
+            steps {
+                script {
+                    deployAndTest("158.247.239.62")
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment completed successfully.'
+        }
+        failure {
+            echo 'Deployment encountered an error.'
+        }
+    }
+}
+
+def deployAndTest(serverIp) {
+    def jarFile = 'target/shortenurlservice-0.0.1-SNAPSHOT.jar'
+    def deployPath = '/root'
+    def runAppCommand = "nohup java -jar $deployPath/shortenurlservice-0.0.1-SNAPSHOT.jar > $deployPath/app.log 2>&1 &"
+    def checkLogCommand = "grep -q 'Started ShortenurlserviceApplication in' $deployPath/app.log"
+    def maxAttempts = 40
+    def sleepInterval = 3 // 3 seconds
+
+    def backupJarFile = 'shortenurlservice-backup.jar'
+
+    // 기존 애플리케이션 종료
+    sshagent(['deploy_ssh_key']) {
+        sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp 'pgrep -f shortenurlservice-0.0.1-SNAPSHOT.jar && pkill -f shortenurlservice-0.0.1-SNAPSHOT.jar || echo \"No process found\"'", returnStatus: true
+    }
+
+    // 기존 JAR 파일 백업
+    sshagent(['deploy_ssh_key']) {
+        sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp 'cp $deployPath/shortenurlservice-0.0.1-SNAPSHOT.jar $deployPath/$backupJarFile'", returnStatus: true
+    }
+
+    // 서버에 파일을 SCP로 전송
+    sh "scp -o StrictHostKeyChecking=no $jarFile root@$serverIp:$deployPath/"
+
+    // 원격 서버에서 애플리케이션 비동기 실행
+    sshagent(['deploy_ssh_key']) {
+        sh "ssh -o StrictHostKeyChecking=no root@$serverIp '$runAppCommand'"
+
+        // 로그 파일을 주기적으로 확인하여 애플리케이션 실행 확인
+        def attempts = 0
+        def deploymentSuccess = false
+        while (attempts < maxAttempts) {
+            int result = sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp '$checkLogCommand'", returnStatus: true
+            if (result == 0) {
+                echo "Deployment to $serverIp was successful."
+                deploymentSuccess = true
+                break
+            }
+            attempts++
+            sleep sleepInterval
+        }
+
+        if (!deploymentSuccess) {
+            error "Deployment to $serverIp failed."
+        }
+
+        // CD 테스트 수행
+        int cdTestResult = sh script: "curl -s -o /dev/null -w '%{http_code}' http://$serverIp/ui/create-shortenurl.html", returnStatus: true
+        if (cdTestResult != 200) {
+            echo "CD test failed for $serverIp. Rolling back to previous version."
+            rollbackToPreviousVersion(serverIp, backupJarFile, deployPath, runAppCommand, checkLogCommand)
+            error "Deployment to $serverIp failed due to CD test failure."
+        } else {
+            echo "CD test passed for $serverIp."
+        }
+    }
+}
+
+def rollbackToPreviousVersion(serverIp, backupJarFile, deployPath, runAppCommand, checkLogCommand) {
+    def maxAttempts = 40
+    def sleepInterval = 3 // 3 seconds
+
+    // 기존 애플리케이션 종료
+    sshagent(['deploy_ssh_key']) {
+        sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp 'pgrep -f shortenurlservice-0.0.1-SNAPSHOT.jar && pkill -f shortenurlservice-0.0.1-SNAPSHOT.jar || echo \"No process found\"'", returnStatus: true
+    }
+
+    // 백업된 JAR 파일로 롤백
+    sshagent(['deploy_ssh_key']) {
+        sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp 'mv $deployPath/$backupJarFile $deployPath/shortenurlservice-0.0.1-SNAPSHOT.jar'", returnStatus: true
+        sh "ssh -o StrictHostKeyChecking=no root@$serverIp '$runAppCommand'"
+
+        // 로그 파일을 주기적으로 확인하여 애플리케이션 실행 확인
+        def attempts = 0
+        def rollbackSuccess = false
+        while (attempts < maxAttempts) {
+            int result = sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp '$checkLogCommand'", returnStatus: true
+            if (result == 0) {
+                echo "Rollback to previous version on $serverIp was successful."
+                rollbackSuccess = true
+                break
+            }
+            attempts++
+            sleep sleepInterval
+        }
+
+        if (!rollbackSuccess) {
+            error "Rollback to previous version on $serverIp failed."
+        }
+    }
+}
