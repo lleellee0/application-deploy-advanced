@@ -35,7 +35,7 @@ pipeline {
                     
                     // 원격 서버에서 애플리케이션 실행
                     sshagent(['deploy_ssh_key']) { // 'server-ssh-credentials'는 Jenkins에서 설정한 credentials ID
-                        sh "ssh root@$serverIp '$runAppCommand'"
+                        sh "ssh -o StrictHostKeyChecking=no root@$serverIp '$runAppCommand'"
                     }
                 }
             }
