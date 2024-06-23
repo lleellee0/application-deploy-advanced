@@ -30,15 +30,15 @@ pipeline {
                     def checkLogCommand = "grep -q 'Started ShortenurlserviceApplication in' $deployPath/app.log"
                     
                     // 서버에 파일을 SCP로 전송
-                    sh "scp $jarFile root@$serverIp:$deployPath/"
+                    sh "scp -o StrictHostKeyChecking=no $jarFile root@$serverIp:$deployPath/"
                     
                     // 원격 서버에서 애플리케이션 비동기 실행
                     sshagent(['deploy_ssh_key']) {
-                        sh "ssh root@$serverIp '$runAppCommand'"
+                        sh "ssh -o StrictHostKeyChecking=no root@$serverIp '$runAppCommand'"
                         sleep 20 // 애플리케이션이 시작될 시간을 제공합니다.
                         
                         // 로그 파일을 확인하여 애플리케이션 실행 확인
-                        int result = sh script: "ssh root@$serverIp '$checkLogCommand'", returnStatus: true
+                        int result = sh script: "ssh -o StrictHostKeyChecking=no root@$serverIp '$checkLogCommand'", returnStatus: true
                         if (result == 0) {
                             echo 'Deployment was successful.'
                         } else {
