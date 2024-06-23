@@ -31,7 +31,7 @@ pipeline {
                     def runAppCommand = "java -jar $deployPath/shortenurlservice-0.0.1-SNAPSHOT.jar"
                     
                     // 서버에 파일을 SCP로 전송
-                    sh "scp $jarFile root@$serverIp:$deployPath/"
+                    sh "scp -o StrictHostKeyChecking=no $jarFile root@$serverIp:$deployPath/"
                     
                     // 원격 서버에서 애플리케이션 실행
                     sshagent(['deploy_ssh_key']) { // 'server-ssh-credentials'는 Jenkins에서 설정한 credentials ID
